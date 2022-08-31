@@ -1,6 +1,7 @@
 import asyncio
 import argparse
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple, Generator
@@ -11,6 +12,7 @@ from src.cache_engine import RedisEngine
 from src.logger import Logger
 
 
+REDIS_CHANNEL = os.environ.get('REDIS_FW_CHANNEL', 'file_watcher')
 logger = Logger.with_default_handlers()
 
 
@@ -107,7 +109,7 @@ class FileWatcher:
 
     async def broadcast_new_file_data(self, file_data: dict):
         await logger.info(f'Updated files: {len(file_data)}')
-        await self.cache.publish('file_watcher', json.dumps(file_data))
+        await self.cache.publish(REDIS_CHANNEL, json.dumps(file_data))
 
 
 def main():

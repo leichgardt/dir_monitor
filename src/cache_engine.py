@@ -38,6 +38,11 @@ class RedisEngine:
     async def get(self, name: str) -> str:
         return await self.core.get(name)
 
+    async def get_all(self) -> dict:
+        keys = await self.core.keys()
+        data = await self.core.mget(keys)
+        return dict(zip(keys, data))
+
     async def delete(self, *names: str) -> int:
         return await self.core.delete(*names)
 

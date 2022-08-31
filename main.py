@@ -8,16 +8,38 @@
 
 Код может запускаться в докере или просто консоли. Клиентское приложение может быть страничкой в браузере.
 """
-from fastapi import FastAPI
+import json
+import os
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from websockets.exceptions import ConnectionClosedOK
+
+from src.cache_engine import RedisEngine
+from src.logger import Logger
+
+
+REDIS_CHANNEL = os.environ.get('REDIS_FW_CHANNEL', 'file_watcher')
+REDIS_URL = os.environ.get('REDIS_FW_URL', 'redis://localhost/0')
 
 app = FastAPI()
+cache = RedisEngine(REDIS_URL)
+logger = Logger.with_default_handlers()
 
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-
-@app.get("/hello/{name}")
-async def say_hello(name: str):
-    return {"message": f"Hello {name}"}
+@app.websocket('/ws')
+async def websocket_endpoint(websocket: WebSocket):
+    pubsub = cache.get_pubsub()
+    try:
+        await websocket.accept()
+        await websocket.send_json({'data': await cache.get_all()})
+        await pubsub.subscribe(REDIS_CHANNEL)
+        while True:
+            message = await pubsub.get_message(ignore_subscribe_messages=True)
+            if message:
+                await websocket.send_json(json.loads(message).get('data'))
+    except (WebSocketDisconnect, ConnectionClosedOK):
+        pass
+    except Exception as e:
+        await logger.exception(f'WebSocket error: {e}')
+    finally:
+        await pubsub.unsubscribe()
