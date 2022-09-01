@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dir monitor</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <script type="text/javascript">
+        function remove_from_array(arr, value) {
+            return arr.filter(function(ele) {
+                return ele !== value;
+            });
+        }
+
+        class FileTable {
+            constructor(table_body_id) {
+                this.object = document.getElementById(table_body_id);
+            }
+
+            parseData(files) {
+                for (let i = 0; i < files.length; i++) {
+                    let data = files[i];
+                    let file = data[0],
+                        status = data[1].status,
+                        time = data[1].time;
+                    switch (status) {
+                        case 'new':
+                            this.addNewFile(file, time);
+                            break;
+                        case 'updated':
+                            this.updateFile(file, time);
+                            break;
+                        case 'deleted':
+                            this.deleteFile(file)
+                            break;
+                    }
+                }
+            }
+
+            clear() {
+                this.object.innerHTML = '';
+            }
+
+            notify(obj) {
+                obj.classList.add('notifying')
+                setTimeout(function () { obj.classList.remove('notifying'); }, 500);
+            }
+
+            addNewFile(file, time) {
+                if (document.getElementById('file')) {
+                    this.updateFile(file, time);
+                } else {
+                    console.log('Adding', file);
+                    let file_col = document.createElement('td');
+                    file_col.innerText = file;
+                    let time_col = document.createElement('td');
+                    time_col.innerText = time;
+                    let row = document.createElement('tr');
+                    row.setAttribute('id', file);
+                    row.append(file_col, time_col);
+                    this.notify(row);
+                    this.object.append(row);
+                }
+            }
+
+            updateFile(file, time) {
+                console.log('Updating', file);
+                let row = document.getElementById(file);
+                this.notify(row);
+                let cols = row.getElementsByTagName('td');
+                cols[1].innerText = time;
+                row.remove();
+                this.object.append(row);
+            }
+
+            deleteFile(file) {
+                console.log('Deleting', file);
+                this.notify(this.object);
+                document.getElementById(file).remove();
+            }
+        }
+
+        let connection_list = [];
+
+        class WSConnection {
+            constructor(url, table) {
+                this.socket = null;
+                this.url = url;
+                this.table = table;
+                this.alert_flag = false;
+            }
+
+            run(chat) {
+                this.connect_to_server(this, chat);
+                setInterval(this.connect_to_server, 2000, this, chat);
+            }
+
+            connect_to_server(self) {
+                if ((self.socket !== null && self.socket.readyState === WebSocket.OPEN)) {
+                    return;
+                }
+
+                self.socket = new WebSocket(self.url);
+
+                self.socket.onopen = () => {
+                    console.log('WebSocket: connected');
+                    connection_list.push(self.socket);
+                    if (connection_list.length > 1)
+                        // reload a page if multiple websockets of the page connected
+                        window.location.reload();
+                    else {
+                        self.table.clear();
+                        self.alert_flag = false;
+                    }
+                }
+                self.socket.onerror = () => {
+                    if (self.alert_flag === false) {
+                        alert('Server connection error');
+                        self.alert_flag = true;
+                    }
+                    self.socket.close();
+                }
+                self.socket.onclose = () => {
+                    connection_list = remove_from_array(connection_list, self.socket);
+                    self.socket = null;
+                }
+                self.socket.onmessage = (event) => {
+                    self.table.parseData(JSON.parse(event.data));
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            let table = new FileTable('file-table-body');
+            let ws = new WSConnection('ws://127.0.0.1:8000/ws', table);
+            ws.run();
+        });
+    </script>
+    <style>
+        * {
+            transition: 1s;
+            animation: show 1s;
+        }
+
+        .notifying {
+            transition: 1s;
+            animation: show 1s;
+            background: yellow;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="text-center my-4">
+        <h1>Dir monitor <i class="fa fa-low-vision"></i></h1>
+    </div>
+    <div>
+        <table class="table">
+            <thead class="table-dark">
+            <tr>
+                <td>File</td>
+                <td>Modified</td>
+            </tr>
+            </thead>
+            <tbody id="file-table-body"></tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>
