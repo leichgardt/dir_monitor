@@ -9,11 +9,10 @@ from typing import Tuple, Generator
 from art import tprint
 
 from src.cache_engine import RedisEngine
-from src.logger import Logger
+from src.logger import logger
 
 
 REDIS_CHANNEL = os.environ.get('REDIS_FW_CHANNEL', 'file_watcher')
-logger = Logger.with_default_handlers()
 
 
 def get_root_path(path: Path, depth: int) -> str:
