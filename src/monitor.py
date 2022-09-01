@@ -47,68 +47,88 @@ class FileWatcher:
         self.path = dir_path
         self.cache = RedisEngine(cache_url)
         self.sleep_time = sleep_time
+        self.saved_files = {}
 
     def start(self, loop: asyncio.AbstractEventLoop = None):
         if not loop:
             loop = asyncio.get_event_loop()
+        self.cache.connect_to_server()
         loop.run_until_complete(self.watch_files())
 
     async def watch_files(self):
-        await logger.info('File watcher starts')
-        saved_file_data = {}
-        await self._pre_start(saved_file_data)
+        logger.info('File watcher starts')
+        await self._pre_start()
         while True:
             try:
-                checked_files = await self._check_files(saved_file_data)
-                await self.broadcast_new_file_data(checked_files)
+                checked_files = await self.check_and_handle_files()
+                updated_files = {file: m_time for file, m_time in checked_files.items() if m_time}
+                if updated_files:
+                    await self.broadcast_new_file_data(updated_files)
             except KeyboardInterrupt:
                 return
             except Exception as e:
-                await logger.error(f'File watcher error: {e}')
+                logger.exception(f'File watcher error: {e}')
+                exit()
             else:
                 await asyncio.sleep(self.sleep_time)
 
-    async def _pre_start(self, saved_files: dict):
+    async def _pre_start(self):
         await self.cache.clear()
-        for file, m_time in get_files_and_modified_time(self.path):
-            saved_files[file] = m_time
+        logger.info('Cache server clear')
+        for file, m_time in get_files_and_their_modification_time(self.path):
+            self.saved_files[file] = m_time
             await self.cache.set(file, str(m_time))
+        logger.info(f'Loaded files: {len(self.saved_files)}')
         await asyncio.sleep(self.sleep_time)
 
-    async def _check_files(self, saved_files: dict):
+    async def check_and_handle_files(self):
         """File data duplicates twice: in the monitor and in Redis (for more reactivity)."""
         checked_files = {}
-        for file, m_time in get_files_and_modified_time(self.path):
-            result = self._check_file(saved_files, file, m_time)
-            if result:
-                if result == 'new':
-                    checked_files[file] = {'status': 'new', 'time': str(m_time)}
-                elif result == 'update':
-                    checked_files[file] = {'status': 'updated', 'time': str(m_time)}
-                saved_files[file] = m_time
-                await self.cache.set(file, str(m_time))
-        for file in self._get_missing_files(saved_files, checked_files):
-            checked_files[file] = {'status': 'deleted'}
-            saved_files.pop(file)
-            await self.cache.delete(file)
+        for file, m_time in self.get_files_to_load(checked_files):
+            if await self.cache.set(file, str(m_time)):
+                logger.debug(f'File "{file}" has been loaded to cache')
+        missed_files = list(self._get_missed_files_to_delete(checked_files))
+        if missed_files:
+            await self.cache.delete(*missed_files)
+            for file in missed_files:
+                self.saved_files.pop(file)
+            logger.info(f'Deleted missing files: {len(missed_files)}')
         return checked_files
 
-    @staticmethod
-    async def _check_file(saved_files: dict, file: str, m_time: datetime) -> str:
-        if file not in saved_files:
-            return 'new'
-        else:
-            if saved_files[file] != m_time:
-                return 'update'
-        return ''
+    def get_files_to_load(self, checked_files: dict) -> Generator[Tuple[str, datetime], None, None]:
+        for file, m_time in get_files_and_their_modification_time(self.path):
+            file_status = self.get_file_status(file, m_time)
+            if file_status:
+                logger.debug(f'File "{file}". Result={file_status}')
+                if file_status == 'new':
+                    checked_files[file] = {'status': 'new', 'time': str(m_time)}
+                elif file_status == 'update':
+                    checked_files[file] = {'status': 'updated', 'time': str(m_time)}
+                self.saved_files[file] = m_time
+                yield file, m_time
+            else:
+                checked_files[file] = None  # status: file not changed
 
-    @staticmethod
-    def _get_missing_files(saved_files: dict, checked_files: dict) -> set:
-        return set(saved_files.keys()) - set(checked_files.keys())
+    def get_file_status(self, file: str, m_time: datetime) -> str:
+        if file not in self.saved_files:
+            return 'new'
+        elif self.saved_files[file] != m_time:
+            return 'update'
+        else:
+            return ''
+    
+    def _get_missed_files_to_delete(self, checked_files: dict) -> Generator[str, None, None]:
+        for file in self._get_missing_files(checked_files):
+            logger.debug(f'Missed file "{file}". Deleting')
+            checked_files[file] = {'status': 'deleted'}
+            yield file
+
+    def _get_missing_files(self, checked_files: dict) -> Generator[str, None, None]:
+        return (file for file in self.saved_files.keys() if file not in checked_files)
 
     async def broadcast_new_file_data(self, file_data: dict):
-        await logger.info(f'Updated files: {len(file_data)}')
         await self.cache.publish(REDIS_CHANNEL, json.dumps(file_data))
+        logger.info(f'Updated files: {len(file_data)}')
 
 
 def main():
