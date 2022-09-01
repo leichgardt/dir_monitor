@@ -4,12 +4,13 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple, Generator
+from typing import Dict, Tuple, List, Union, Generator
 
 from art import tprint
 
 from src.cache_engine import RedisEngine
 from src.logger import logger
+from src.file_model import File
 
 
 REDIS_CHANNEL = os.environ.get('REDIS_FW_CHANNEL', 'file_watcher')
@@ -23,7 +24,7 @@ def get_files(path: Path) -> Generator[Path, None, None]:
     return path.glob('[!_.]*')
 
 
-def get_files_and_modified_time(
+def get_files_and_their_modification_time(
         path: Path,
         *,
         recursive: bool = True,
@@ -31,10 +32,9 @@ def get_files_and_modified_time(
 ) -> Generator[Tuple[str, datetime], None, None]:
     root_path = '' if depth == 1 else get_root_path(path, depth)
     depth += 1
-    files = get_files(path)
-    for file in files:
+    for file in get_files(path):
         if recursive and file.is_dir():
-            yield from get_files_and_modified_time(file, depth=depth)
+            yield from get_files_and_their_modification_time(file, depth=depth)
         else:
             filepath = root_path + file.name + ('/' if file.is_dir() else '')
             modified_time = datetime.fromtimestamp(file.stat().st_mtime)
@@ -61,11 +61,13 @@ class FileWatcher:
         while True:
             try:
                 checked_files = await self.check_and_handle_files()
-                updated_files = {file: m_time for file, m_time in checked_files.items() if m_time}
+                updated_files = [File(file=file, data=data).to_obj() for file, data in checked_files.items() if data]
                 if updated_files:
                     await self.broadcast_new_file_data(updated_files)
             except KeyboardInterrupt:
                 return
+            except FileNotFoundError:
+                pass
             except Exception as e:
                 logger.exception(f'File watcher error: {e}')
                 exit()
@@ -81,7 +83,7 @@ class FileWatcher:
         logger.info(f'Loaded files: {len(self.saved_files)}')
         await asyncio.sleep(self.sleep_time)
 
-    async def check_and_handle_files(self):
+    async def check_and_handle_files(self) -> Dict[str, Dict[str, Union[str, datetime]]]:
         """File data duplicates twice: in the monitor and in Redis (for more reactivity)."""
         checked_files = {}
         for file, m_time in self.get_files_to_load(checked_files):
@@ -126,7 +128,7 @@ class FileWatcher:
     def _get_missing_files(self, checked_files: dict) -> Generator[str, None, None]:
         return (file for file in self.saved_files.keys() if file not in checked_files)
 
-    async def broadcast_new_file_data(self, file_data: dict):
+    async def broadcast_new_file_data(self, file_data: List[File]):
         await self.cache.publish(REDIS_CHANNEL, json.dumps(file_data))
         logger.info(f'Updated files: {len(file_data)}')
 
