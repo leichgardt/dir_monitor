@@ -1,3 +1,5 @@
+"""Directory monitor that saves and publishes updates using Redis"""
+
 import asyncio
 import argparse
 import json
@@ -9,36 +11,15 @@ from typing import Dict, Tuple, List, Union, Generator
 from art import tprint
 
 from src.cache_engine import RedisEngine
+from src.file_explorer import get_files_and_their_modification_time
+from src.model_file import File
 from src.logger import logger
-from src.file_model import File
+
+
+__author__ = 'Leichgardt'
 
 
 REDIS_CHANNEL = os.environ.get('REDIS_FW_CHANNEL', 'file_watcher')
-
-
-def get_root_path(path: Path, depth: int) -> str:
-    return '/'.join(path.parts[:depth]) + '/'
-
-
-def get_files(path: Path) -> Generator[Path, None, None]:
-    return path.glob('[!_.]*')
-
-
-def get_files_and_their_modification_time(
-        path: Path,
-        *,
-        recursive: bool = True,
-        depth: int = 1
-) -> Generator[Tuple[str, datetime], None, None]:
-    root_path = '' if depth == 1 else get_root_path(path, depth)
-    depth += 1
-    for file in get_files(path):
-        if recursive and file.is_dir():
-            yield from get_files_and_their_modification_time(file, depth=depth)
-        else:
-            filepath = root_path + file.name + ('/' if file.is_dir() else '')
-            modified_time = datetime.fromtimestamp(file.stat().st_mtime)
-            yield filepath, modified_time
 
 
 class FileWatcher:
@@ -154,5 +135,11 @@ def main():
         watcher.start()
 
 
+def test():
+    watcher = FileWatcher(Path('/src'), 'redis://localhost/0', 1)
+    watcher.start()
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    test()

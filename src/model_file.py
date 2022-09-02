@@ -1,7 +1,12 @@
+"""Model of file to unified sending data from server app and monitor"""
+
 from datetime import datetime
 from typing import Dict, Union
 
 from pydantic import BaseModel
+
+
+__all__ = ('File',)
 
 
 class File(BaseModel):

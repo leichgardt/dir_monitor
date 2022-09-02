@@ -1,3 +1,5 @@
+"""Web application for delivering a directory list of files to subscribers (clients) by websockets and Redis"""
+
 import json
 import os
 
@@ -7,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from websockets.exceptions import ConnectionClosedOK
 
 from src.cache_engine import RedisEngine
-from src.file_model import File
+from src.model_file import File
 from src.logger import logger
 
 
@@ -60,5 +62,5 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.exception(f'WebSocket error: {e}')
     finally:
-        await pubsub.unsubscribe()
         await websocket.close()
+        await pubsub.unsubscribe()  # todo freezes at restart - fix it

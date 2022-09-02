@@ -1,6 +1,9 @@
 from abc import ABCMeta
 
 
+__all__ = ('Singleton',)
+
+
 class Singleton(ABCMeta):
     _instances = {}
 
