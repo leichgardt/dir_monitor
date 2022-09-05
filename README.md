@@ -1,25 +1,26 @@
 # Dir monitor
 
 This is a directory content monitor - client-server application.
-A server watches for changes in the directory and quickly updates it on the client if some content changes. 
+The server watches for changes in the directory and quickly updates it on the client if some content changes. 
 The client app is a simple web page with a table of files. 
-Client and server can work independently.
+The client and the server can work independently.
 
-Web application and monitor split into two programs.
+Web application and monitor are split into two programs.
 
-Monitor parameters specifies at script launch as command arguments. Other settings specifies in environment variables.
+Monitor parameters specifies at script launch as command arguments.
+Other settings specifies in environment variables.
 
 # Features
 * Asyncio
-* Microservices architecture: monitor, web-server, client
+* Backend microservice architecture: split monitor and web-server
 * Recursive monitoring of directories
 
 Microservices allow to horizontal scaling of server.
 One monitor and pool of servers can service many clients.
 
-The client `index.html` file delivers by the server, 
+The client `index.html` file is delivering by the server, 
 but for more client-server independency it can be achieved 
-by distributing static files using Nginx (or another webserver)
+by Nginx static files distributing (or another webserver).
 
 ***
 
