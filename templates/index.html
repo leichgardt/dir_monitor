@@ -41,9 +41,13 @@
                 this.object.innerHTML = '';
             }
 
-            notify(obj) {
-                obj.classList.add('notifying')
-                setTimeout(function () { obj.classList.remove('notifying'); }, 500);
+            notify(obj, to_delete=false) {
+                if (!to_delete) {
+                    obj.classList.add('notifying')
+                    setTimeout(function () { obj.classList.remove('notifying'); }, 500);
+                } else {
+                    obj.classList.add('notifying-to-delete')
+                }
             }
 
             addNewFile(file, time) {
@@ -75,8 +79,9 @@
 
             deleteFile(file) {
                 console.log('Deleting', file);
-                this.notify(this.object);
-                document.getElementById(file).remove();
+                let row = document.getElementById(file);
+                this.notify(row, true);
+                setTimeout(function () { row.remove(); }, 1200);
             }
         }
 
@@ -92,7 +97,7 @@
 
             run(chat) {
                 this.connect_to_server(this, chat);
-                setInterval(this.connect_to_server, 2000, this, chat);
+                setInterval(this.connect_to_server, 2000, this, chat);  // reconnection when connection is lost
             }
 
             connect_to_server(self) {
@@ -146,6 +151,12 @@
             transition: 1s;
             animation: show 1s;
             background: yellow;
+        }
+
+        .notifying-to-delete {
+            transition: 1s;
+            animation: show 1s;
+            background: red;
         }
     </style>
 </head>
