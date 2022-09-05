@@ -1,8 +1,12 @@
-"""Web application for delivering a directory list of files to subscribers (clients) by websockets and Redis"""
+"""
+Web application for loading from Redis and delivering a list of directory files to subscribers (clients)
+using websockets
+"""
 
 import json
 import os
 
+from aioredis.client import PubSub
 from aioredis.exceptions import ConnectionError as RedisConnectionError
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.templating import Jinja2Templates
@@ -41,9 +45,11 @@ async def index(request: Request):
 
 @app.websocket('/ws')
 async def websocket_endpoint(websocket: WebSocket):
-    pubsub = cache.get_pubsub()
+    # TODO Move from Redis to message broker for websocket subscribing
+    pubsub: PubSub = None
     try:
         await websocket.accept()
+        pubsub = cache.get_pubsub()
         data = await cache.get_all()
         sorted_data = []
         for file, time in sorted(data.items(), key=lambda item: item[1]):
@@ -58,9 +64,10 @@ async def websocket_endpoint(websocket: WebSocket):
     except (WebSocketDisconnect, ConnectionClosedOK):
         pass
     except RedisConnectionError as e:
-        logger.error(f'Redis PubSub connection error on Websocket: {e}')
+        logger.error(f'Redis connection error on Websocket <{websocket.client}>: {e}')
     except Exception as e:
-        logger.exception(f'WebSocket error: {e}')
+        logger.exception(f'WebSocket error <{websocket.client}>: {e}')
     finally:
         await websocket.close()
-        await pubsub.unsubscribe()  # todo freezes at restart - fix it
+        if pubsub is not None:
+            await pubsub.unsubscribe()

@@ -1,4 +1,4 @@
-"""Designed Byte decoder to Redis output"""
+"""Byte decoder"""
 
 from typing import Iterable
 

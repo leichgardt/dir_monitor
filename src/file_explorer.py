@@ -1,4 +1,4 @@
-"""Recursive generator to walk at directories"""
+"""Recursive generator to walk at directories and get files"""
 
 from datetime import datetime
 from pathlib import Path

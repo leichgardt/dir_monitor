@@ -1,4 +1,4 @@
-"""Redis class to saving a directory data and publishing updates to subscribers (connected to websockets)"""
+"""Redis class for getting and saving a data and publishing updates to subscribers"""
 
 import time
 from functools import wraps

@@ -37,7 +37,7 @@ class FileWatcher:
         loop.run_until_complete(self.watch_files())
 
     async def watch_files(self):
-        logger.info('File watcher starts')
+        logger.info(f'File watcher are start watching for {self.path.resolve()}')
         await self._pre_start()
         while True:
             try:
@@ -141,5 +141,5 @@ def test():
 
 
 if __name__ == '__main__':
-    # main()
-    test()
+    main()
+    # test()
